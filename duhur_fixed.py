@@ -53,7 +53,7 @@ try:
         TEMPMAIL_API_KEY,
         OMYGPT_API_KEY,
         OMDB_API_KEY,
-    SMS_BUS_API_KEY,
+        SMS_BUS_API_KEY,
         FIREBASE_API_KEY,
     )
 except ImportError:
@@ -4959,8 +4959,6 @@ async def handle_word_chain_reply(update: Update, context: ContextTypes.DEFAULT_
 # SMS BUS OTP - PREMIUM ULTIMATE VERSION
 # Virtual Number SMS Receiver (sms-bus.com API)
 # ==========================================
-
-SMS_BUS_API_KEY = os.getenv("SMS_BUS_API_KEY", "")
 SMS_BUS_BASE_URL = "https://sms-bus.com/api/control"
 
 # Active SMS orders: {user_id: {"request_id": int, "phone": str, "service": str, ...}}
