@@ -53,6 +53,7 @@ try:
         TEMPMAIL_API_KEY,
         OMYGPT_API_KEY,
         OMDB_API_KEY,
+    SMS_BUS_API_KEY,
         FIREBASE_API_KEY,
     )
 except ImportError:
