@@ -2580,44 +2580,411 @@ async def dl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{icon} <b>OKTACOMEL {pname}</b>\n"
             f"━━━━━━━━━━━━━━━━━━\n"
             f"📝 <b>Title:</b> {html.escape(title[:120])}\n"
-            f"👤 <b>By:</b> {html.escape(uploader[:60])}"
+# ==========================================
+# 📥 DOWNLOADER (/dl) - GiMiTA FIXED ENDPOINTS (SAFE)
+# ==========================================
+
+GIMITA_ENDPOINTS = {
+    "tiktok": "https://api.gimita.id/api/downloader/tiktok",
+    "facebook": "https://api.gimita.id/api/downloader/facebook",
+    "terabox": "https://api.gimita.id/api/downloader/terabox",
+    "twitter": "https://api.gimita.id/api/downloader/twitter",
+    "youtube": "https://api.gimita.id/api/downloader/ytmp4",
+    "spotify": "https://api.gimita.id/api/downloader/spotify",
+    "pornhub": "https://api.gimita.id/api/downloader/pornhub",
+    "xnxx": "https://api.gimita.id/api/downloader/xnxx",
+}
+
+def _first_str(*vals):
+    """Get first non-empty string from values"""
+    for v in vals:
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
+
+def _safe_dict_get(obj, *keys, default=""):
+    """Safely get nested dict values"""
+    if not isinstance(obj, dict):
+        return default
+    current = obj
+    for key in keys:
+        if isinstance(current, dict):
+            current = current.get(key)
+        else:
+            return default
+    return current if current else default
+
+def _collect_urls(obj, platform: str = None):
+    """
+    Smart URL collector yang lebih robust
+    """
+    out = {"video": [], "audio": [], "image": [], "other": [], "music_info": None}
+    
+    visited = set()  # Prevent duplicates
+    has_real_video = False
+
+    def push(url: str, bucket: str):
+        nonlocal has_real_video
+        if not isinstance(url, str):
+            return
+        url = url.strip()
+        if not url.startswith(("http://", "https://")):
+            return
+        if url in visited:
+            return
+        visited.add(url)
+        out[bucket].append(url)
+        if bucket == "video":
+            has_real_video = True
+
+    def walk(x, depth=0):
+        """Recursive walk dengan depth limit"""
+        if depth > 10:  # Prevent infinite recursion
+            return
+            
+        if isinstance(x, dict):
+            # Priority: Check specific keys first
+            for key in ["video", "play", "download", "nowatermark", "hdplay"]:
+                val = x.get(key)
+                if isinstance(val, str) and val.startswith("http"):
+                    push(val, "video")
+            
+            # Music detection
+            for key in ["music", "audio", "sound"]:
+                val = x.get(key)
+                if isinstance(val, dict):
+                    # TikTok music format
+                    music_url = val.get("play_url", {})
+                    if isinstance(music_url, dict):
+                        music_url = music_url.get("uri")
+                    if isinstance(music_url, str) and music_url.startswith("http"):
+                        push(music_url, "audio")
+                    
+                    out["music_info"] = {
+                        "title": val.get("title", "Unknown"),
+                        "author": val.get("author", "Unknown"),
+                        "url": music_url
+                    }
+                elif isinstance(val, str) and val.startswith("http"):
+                    push(val, "audio")
+            
+            # Image detection
+            for key in ["image", "photo", "thumbnail", "cover"]:
+                val = x.get(key)
+                if isinstance(val, str) and val.startswith("http"):
+                    if "thumbnail" not in key or not has_real_video:
+                        push(val, "image")
+                elif isinstance(val, list):
+                    for item in val:
+                        if isinstance(item, str) and item.startswith("http"):
+                            push(item, "image")
+            
+            # Recursive walk all values
+            for v in x.values():
+                walk(v, depth + 1)
+                    
+        elif isinstance(x, list):
+            for item in x:
+                walk(item, depth + 1)
+        
+        elif isinstance(x, str) and x.startswith("http"):
+            # Direct URL string - detect type
+            x_lower = x.lower()
+            if any(t in x_lower for t in [".mp4", ".webm", ".mov"]):
+                push(x, "video")
+            elif any(t in x_lower for t in [".mp3", ".m4a", ".aac"]):
+                push(x, "audio")
+            else:
+                push(x, "image")
+
+    walk(obj)
+
+    # Fallback: Manual search untuk URLs yang tersembunyi
+    if not (out["video"] or out["audio"] or out["image"]):
+        if isinstance(obj, dict):
+            # Coba cari di key-key umum
+            for common_key in ["url", "data", "result", "media", "download", "link"]:
+                val = obj.get(common_key)
+                if isinstance(val, str) and val.startswith("http"):
+                    if ".mp4" in val.lower() or ".webm" in val.lower():
+                        push(val, "video")
+                    elif ".mp3" in val.lower():
+                        push(val, "audio")
+                    else:
+                        push(val, "image")
+
+    return out
+
+async def gimita_fetch(platform: str, target_url: str) -> tuple[dict | None, str | None]:
+    """
+    Fetch dari GiMiTA API dengan retry logic
+    Returns: (data, error_message)
+    """
+    endpoint = GIMITA_ENDPOINTS.get(platform)
+    if not endpoint:
+        return None, "Platform tidak didukung"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json,text/plain,*/*",
+    }
+
+    async with httpx.AsyncClient(timeout=45.0, follow_redirects=True, headers=headers) as client:
+        try:
+            r = await client.get(endpoint, params={"url": target_url})
+            
+            if r.status_code == 200:
+                try:
+                    data = r.json()
+                except:
+                    return None, "Invalid JSON response from API"
+                
+                # Cek apakah response error
+                if isinstance(data, dict):
+                    if data.get("success") is False or data.get("status") is False:
+                        error_msg = _first_str(
+                            data.get("error"),
+                            data.get("message"),
+                            data.get("msg"),
+                            "Request failed"
+                        )
+                        return None, error_msg
+                
+                return data, None
+            else:
+                try:
+                    error_data = r.json()
+                    error_msg = error_data.get("error") or error_data.get("message") or f"HTTP {r.status_code}"
+                except:
+                    error_msg = f"HTTP {r.status_code}"
+                return None, error_msg
+            
+        except asyncio.TimeoutError:
+            return None, "Request timeout - server tidak merespon"
+        except httpx.ConnectError:
+            return None, "Gagal terhubung ke server API"
+        except Exception as e:
+            logger.debug(f"[DL] Error: {e}")
+            return None, f"Error: {type(e).__name__}"
+
+@rate_limit(seconds=2)
+async def dl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await premium_lock_handler(update, context): 
+        return
+    
+    user_id = update.effective_user.id
+    msg = update.message
+    status_msg = None
+
+    if not context.args:
+        return await msg.reply_text(
+            "📥 <b>OKTACOMEL DOWNLOADER • ULTRA V2</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "<b>Usage:</b> <code>/dl [link]</code>\n\n"
+            "Supported Matrix:\n"
+            "• TikTok ✅\n"
+            "• YouTube ✅\n"
+            "• Spotify ✅\n"
+            "• Instagram ✅\n"
+            "• Facebook ✅\n"
+            "• X / Twitter ✅\n"
+            "• Terabox ✅\n"
+            "• Pornhub ✅\n"
+            "• XNXX ✅\n"
+            "• <b>Premium:</b> High-Speed Node ⚡\n\n"
+            "🚀 <i>Send a link to start high-speed extraction.</i>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    url = context.args[0].strip()
+    if not url.startswith(("http://", "https://")):
+        return await msg.reply_text("❌ Invalid URL format.", parse_mode=ParseMode.HTML)
+
+    platform = _detect_platform_gimita(url)
+    if not platform:
+        return await msg.reply_text(
+            "❌ Unsupported link.\n\n"
+            "Supported: TikTok / Instagram / Facebook / Twitter(X) / Terabox / YouTube / Spotify / Pornhub / XNXX",
+            parse_mode=ParseMode.HTML,
+        )
+
+    # Redirect Instagram ke scraper
+    if platform == "instagram_scrape":
+        return await ig_download_command(update, context)
+
+    # Cache check
+    try:
+        cached = await get_media_cache(url)
+        if cached and cached.get("cached"):
+            file_id = cached.get("file_id")
+            m_type = cached.get("media_type", "video")
+            caption = "✅ <b>Cached Delivery</b>\n⚡ <i>Instant</i>"
+            if m_type == "video":
+                await msg.reply_video(file_id, caption=caption, parse_mode=ParseMode.HTML)
+            elif m_type == "audio":
+                await msg.reply_audio(file_id, caption=caption, parse_mode=ParseMode.HTML)
+            elif m_type == "photo":
+                await msg.reply_photo(file_id, caption=caption, parse_mode=ParseMode.HTML)
+            return
+    except Exception:
+        pass
+
+    status_msg = await msg.reply_text(
+        f"⏳ <b>PROCESSING {platform.upper()}...</b>\n"
+        f"<i>Establishing Secure Node Connection...</i>",
+        parse_mode=ParseMode.HTML,
+    )
+
+    try:
+        data, error_msg = await gimita_fetch(platform, url)
+        
+        if error_msg:
+            raise Exception(error_msg)
+        
+        if not data:
+            raise Exception("No response from API")
+
+        # ✅ FIX: Handle list response
+        if isinstance(data, list):
+            if len(data) > 0:
+                data = data[0]
+            else:
+                raise Exception("Empty response list")
+
+        # ✅ FIX: Normalize data structure
+        if not isinstance(data, dict):
+            raise Exception("Invalid response format")
+
+        # Try to extract main data object
+        main_data = data
+        if "data" in data and isinstance(data["data"], dict):
+            main_data = data["data"]
+        elif "result" in data and isinstance(data["result"], dict):
+            main_data = data["result"]
+        elif "video" in data or "url" in data or "download" in data:
+            main_data = data
+
+        # Extract metadata
+        title = _first_str(
+            _safe_dict_get(main_data, "title"),
+            _safe_dict_get(main_data, "name"),
+            _safe_dict_get(data, "title"),
+            "Oktacomel Media"
+        )
+        
+        uploader = _first_str(
+            _safe_dict_get(main_data, "author", "name"),
+            _safe_dict_get(main_data, "author"),
+            _safe_dict_get(main_data, "uploader"),
+            _safe_dict_get(main_data, "creator"),
+            _safe_dict_get(data, "author"),
+            "Oktacomel System"
+        )
+
+        # ✅ IMPROVED: Collect URLs dari data
+        urls = _collect_urls(data, platform)
+        
+        # ✅ FIX: Fallback untuk mendapat URL dari field spesifik
+        if not (urls["video"] or urls["audio"] or urls["image"]):
+            # Direct URL fields
+            for url_key in ["url", "video", "audio", "image", "download", "downloadUrl", "play"]:
+                val = _safe_dict_get(main_data, url_key)
+                if val and val.startswith("http"):
+                    if ".mp3" in val.lower() or ".m4a" in val.lower():
+                        urls["audio"].append(val)
+                    elif ".mp4" in val.lower() or ".webm" in val.lower():
+                        urls["video"].append(val)
+                    else:
+                        urls["image"].append(val)
+            
+            val = _safe_dict_get(data, "url")
+            if val and val.startswith("http") and val not in (urls["video"] + urls["audio"] + urls["image"]):
+                if ".mp3" in val.lower():
+                    urls["audio"].append(val)
+                elif ".mp4" in val.lower():
+                    urls["video"].append(val)
+                else:
+                    urls["image"].append(val)
+
+        if not (urls["video"] or urls["audio"] or urls["image"]):
+            raise Exception("No media URL found in response")
+
+        icon_map = {
+            "tiktok": "🎥", 
+            "instagram": "📸", 
+            "facebook": "📘", 
+            "twitter": "🐦", 
+            "terabox": "📦",
+            "youtube": "▶️",
+            "spotify": "🎵",
+            "pornhub": "🔞",
+            "xnxx": "🔞",
+        }
+        name_map = {
+            "tiktok": "TIKTOK", 
+            "instagram": "INSTAGRAM", 
+            "facebook": "FACEBOOK", 
+            "twitter": "X/TWITTER", 
+            "terabox": "TERABOX",
+            "youtube": "YOUTUBE",
+            "spotify": "SPOTIFY",
+            "pornhub": "PORNHUB",
+            "xnxx": "XNXX",
+        }
+
+        icon = icon_map.get(platform, "📁")
+        pname = name_map.get(platform, platform.upper())
+
+        # Build caption
+        music_line = ""
+        if urls.get("music_info") and platform == "tiktok":
+            mi = urls["music_info"]
+            music_line = f"\n🎵 <b>Sound:</b> {html.escape(str(mi.get('title', 'Unknown'))[:50])} - {html.escape(str(mi.get('author', ''))[:30])}"
+
+        caption_base = (
+            f"{icon} <b>OKTACOMEL {pname}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"📝 <b>Title:</b> {html.escape(str(title)[:120])}\n"
+            f"👤 <b>By:</b> {html.escape(str(uploader)[:60])}"
             f"{music_line}\n"
             f"⚡ <i>Powered by Oktacomel</i>"
         )
 
-        # Hapus status message
+        # Delete status message
         try:
             await status_msg.delete()
-            status_deleted = True
         except Exception:
-            status_deleted = True
+            pass
 
         sent = False
 
-        # send video first
+        # 1️⃣ Send video first
         if urls["video"]:
-            try:
-                v = await msg.reply_video(urls["video"][0], caption=caption_base, parse_mode=ParseMode.HTML)
-                sent = True
+            for v_url in urls["video"][:1]:  # Cuma 1 video
                 try:
-                    await save_media_cache(url, v.video.file_id, "video")
-                except Exception:
-                    pass
-            except Exception as ve:
-                logger.warning(f"[DL] Failed to send video: {ve}")
-                try:
-                    await msg.reply_document(urls["video"][0], caption=caption_base, parse_mode=ParseMode.HTML)
+                    v = await msg.reply_video(v_url, caption=caption_base, parse_mode=ParseMode.HTML)
                     sent = True
-                except Exception:
-                    pass
+                    try:
+                        await save_media_cache(url, v.video.file_id, "video")
+                    except Exception:
+                        pass
+                    break
+                except Exception as ve:
+                    logger.warning(f"[DL] Video send failed: {ve}")
+                    # Try as document
+                    try:
+                        await msg.reply_document(v_url, caption=caption_base, parse_mode=ParseMode.HTML)
+                        sent = True
+                        break
+                    except Exception:
+                        continue
 
-        # then images ONLY if no video was sent (smart detection)
-        # For video posts, images are just thumbnails - skip them
+        # 2️⃣ Send images (hanya jika tidak ada video)
         if urls["image"] and not sent:
-            for i, purl in enumerate(urls["image"][:8]):
+            for i, img_url in enumerate(urls["image"][:8]):
                 try:
-                    cap = caption_base if (not sent and i == 0) else None
-                    p = await msg.reply_photo(purl, caption=cap, parse_mode=ParseMode.HTML)
+                    cap = caption_base if i == 0 else None
+                    p = await msg.reply_photo(img_url, caption=cap, parse_mode=ParseMode.HTML)
                     sent = True
                     if cap:
                         try:
@@ -2625,26 +2992,25 @@ async def dl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         except Exception:
                             pass
                 except Exception as pe:
-                    logger.warning(f"[DL] Failed to send photo {i}: {pe}")
+                    logger.warning(f"[DL] Photo {i} failed: {pe}")
                     continue
 
-        # then audio (untuk Spotify, TikTok music)
+        # 3️⃣ Send audio (Spotify, TikTok)
         if urls["audio"]:
-            # For TikTok, send as separate music message
-            audio_caption = "🎵 <b>Audio/Music</b>"
+            audio_cap = "🎵 <b>Audio/Music</b>"
             if urls.get("music_info") and platform == "tiktok":
                 mi = urls["music_info"]
-                audio_caption = f"🎵 <b>{html.escape(mi.get('title', 'Music')[:60])}</b>\n👤 {html.escape(mi.get('author', '')[:40])}"
+                audio_cap = f"🎵 <b>{html.escape(str(mi.get('title', 'Music'))[:60])}</b>\n👤 {html.escape(str(mi.get('author', ''))[:40])}"
             
             try:
-                a = await msg.reply_audio(urls["audio"][0], caption=audio_caption, parse_mode=ParseMode.HTML)
+                a = await msg.reply_audio(urls["audio"][0], caption=audio_cap, parse_mode=ParseMode.HTML)
                 sent = True
                 try:
                     await save_media_cache(f"{url}_audio", a.audio.file_id, "audio")
                 except Exception:
                     pass
             except Exception as ae:
-                logger.warning(f"[DL] Failed to send audio: {ae}")
+                logger.warning(f"[DL] Audio send failed: {ae}")
 
         if not sent:
             await msg.reply_text("❌ No media to send.", parse_mode=ParseMode.HTML)
@@ -2653,7 +3019,7 @@ async def dl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         error_str = str(e)
         logger.error(f"[DL] user={user_id} | Error: {type(e).__name__}: {e}")
         
-        # Error message yang lebih spesifik
+        # Error message spesifik
         if "private" in error_str.lower() or "invalid" in error_str.lower():
             specific_error = "• Konten mungkin private atau link tidak valid"
         elif "timeout" in error_str.lower():
@@ -2677,7 +3043,7 @@ async def dl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"• Gunakan link langsung ke video/post"
         )
         
-        if status_msg and not status_deleted:
+        if status_msg:
             try:
                 await status_msg.edit_text(error_message, parse_mode=ParseMode.HTML)
             except Exception:
