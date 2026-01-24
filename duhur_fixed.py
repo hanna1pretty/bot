@@ -15491,7 +15491,7 @@ def main():
     app.add_handler(CommandHandler("cfip", cfip_command))
     app.add_handler(CommandHandler("cfhost", cfhost_command))
     app.add_handler(CommandHandler("cfping", cfping_command))
-    app.add_handler(CommandHandler("cfexp", cfexp_command))
+    app.add_handler(CommandHandler("cfexp", cfip_command))
     app.add_handler(CallbackQueryHandler(cf_callback_handler, pattern=r"^cf_"))
 
     # ==========================================
