@@ -15402,7 +15402,6 @@ def main():
     app.add_handler(CallbackQueryHandler(crypto_refresh_handler, pattern=r"^crypto_refresh\|"))
     app.add_handler(CallbackQueryHandler(crypto_alert_handler, pattern=r"^alert\|"))
     app.add_handler(CommandHandler("sha", sha_command))
-    app.add_handler(CallbackQueryHandler(sha_refresh_callback, pattern="^sha_refresh\\|"))
     app.add_handler(CommandHandler("buy", buy_command))
     
     # --- E-Wallet, PLN, Bola (Premium Features) ---
