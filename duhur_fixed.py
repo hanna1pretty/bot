@@ -13380,7 +13380,7 @@ async def sholat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🌇 Maghrib : <code>{t['Maghrib']}</code>\n"
                 f"🌃 Isya    : <code>{t['Isha']}</code>\n\n"
                 f"────────────────────────\n"
-                f"🤲 <i>"Jadikan sabar dan sholat sebagai penolongmu."</i>\n"
+                f"🤲 <i>'Jadikan sabar dan sholat sebagai penolongmu.'</i>\n"
                 f"   <i>(QS. Al-Baqarah: 45)</i>"
             )
 
