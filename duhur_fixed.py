@@ -15454,7 +15454,6 @@ def main():
     app.add_handler(CallbackQueryHandler(crypto_refresh_handler, pattern=r"^crypto_refresh\|"))
     app.add_handler(CallbackQueryHandler(crypto_alert_handler, pattern=r"^alert\|"))
     app.add_handler(CommandHandler("sha", sha_command))
-    app.add_handler(CallbackQueryHandler(sha_refresh_callback, pattern="^sha_refresh\\|"))
     app.add_handler(CommandHandler("buy", buy_command))
     
     # --- E-Wallet, PLN, Bola (Premium Features) ---
@@ -15544,7 +15543,7 @@ def main():
     app.add_handler(CommandHandler("cfip", cfip_command))
     app.add_handler(CommandHandler("cfhost", cfhost_command))
     app.add_handler(CommandHandler("cfping", cfping_command))
-    app.add_handler(CommandHandler("cfexp", cfexp_command))
+    app.add_handler(CommandHandler("cfexp", cfip_command))
     app.add_handler(CallbackQueryHandler(cf_callback_handler, pattern=r"^cf_"))
 
     # ==========================================
