@@ -1870,7 +1870,7 @@ async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     args = context.args
     if not args:
-        await update.message.reply_text("⚠️ <b>Format:</b> <code>/gen 545454</code> or <code>/gen 545454|05|2025</code>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(" <b>Format:</b> <code>/gen 545454</code> or <code>/gen 545454|05|2025</code>", parse_mode=ParseMode.HTML)
         return
 
     input_data = args[0]
@@ -1895,9 +1895,9 @@ async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clean_bin = cc.lower().replace('x', '')[:6]
 
     if not clean_bin.isdigit() or len(clean_bin) < 6:
-        return await update.message.reply_text("❌ BIN Invalid (Must contain at least 6 digits).")
+        return await update.message.reply_text(" BIN Invalid (Must contain at least 6 digits).")
 
-    msg = await update.message.reply_text("⏳ <b>Generating...</b>", parse_mode=ParseMode.HTML)
+    msg = await update.message.reply_text(" <b>Generating...</b>", parse_mode=ParseMode.HTML)
 
     # 1. Fetch BIN Info
     try:
