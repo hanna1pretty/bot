@@ -3097,56 +3097,210 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================
 async def ip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = " ".join(context.args) if context.args else ""
-    if not q: 
+    if not q:
         await update.message.reply_text("⚠️ <b>Usage:</b> <code>/ip domain_or_ip</code>", parse_mode=ParseMode.HTML)
         return
-    
-    msg = await update.message.reply_text("⏳ <b>Scanning network...</b>", parse_mode=ParseMode.HTML)
 
-    # API Request (Fields Lengkap)
-    api_url = f"http://ip-api.com/json/{q}?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,mobile,proxy,hosting,query"
-    
+    msg = await update.message.reply_text("⏳ <b>Scanning...</b>", parse_mode=ParseMode.HTML)
+
     try:
-        r = await fetch_json(api_url)
-        
-        if r and r['status'] == 'success':
-            lat, lon = r['lat'], r['lon']
-            # Link Google Maps Resmi (Biar gak error)
-            map_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
-            
-            # Status Check
-            is_mobile = "✅ Yes" if r.get('mobile') else "❌ No"
-            is_proxy = "🔴 DETECTED" if r.get('proxy') else "🟢 Clean"
-            is_hosting = "🖥️ VPS/Cloud" if r.get('hosting') else "🏠 Residential"
+        target = q.strip()
 
-            # TAMPILAN PREMIUM (BOLD SANS + MONO)
-            txt = (
-                f"🔍 <b>IP INTELLIGENCE</b>\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"🎯 𝗧𝗮𝗿𝗴𝗲𝘁 ⇾ <code>{r['query']}</code>\n"
-                f"🏢 𝗜𝗦𝗣 ⇾ <code>{r['isp']}</code>\n"
-                f"💼 𝗢𝗿𝗴 ⇾ <code>{r.get('org', 'N/A')}</code>\n"
-                f"🔢 𝗔𝗦𝗡 ⇾ <code>{r.get('as', 'N/A')}</code>\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"🌍 𝗟𝗢𝗖𝗔𝗧𝗜𝗢𝗡 𝗗𝗘𝗧𝗔𝗜𝗟\n"
-                f"🏳️ 𝗖𝗼𝘂𝗻𝘁𝗿𝘆 ⇾ <code>{r['country']} ({r['countryCode']})</code>\n"
-                f"📍 𝗥𝗲𝗴𝗶𝗼𝗻 ⇾ <code>{r['regionName']}</code>\n"
-                f"🏙️ 𝗖𝗶𝘁𝘆 ⇾ <code>{r['city']}</code>\n"
-                f"📮 𝗭𝗶𝗽 𝗖𝗼𝗱𝗲 ⇾ <code>{r['zip']}</code>\n"
-                f"⏰ 𝗧𝗶𝗺𝗲𝘇𝗼𝗻𝗲 ⇾ <code>{r['timezone']}</code>\n"
-                f"🛰️ 𝗖𝗼𝗼𝗿𝗱𝘀 ⇾ <code>{lat}, {lon}</code>\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"🛡️ 𝗦𝗘𝗖𝗨𝗥𝗜𝗧𝗬 𝗔𝗡𝗔𝗟𝗬𝗦𝗜𝗦\n"
-                f"📱 𝗠𝗼𝗯𝗶𝗹𝗲 ⇾ <b>{is_mobile}</b>\n"
-                f"🕵️ 𝗣𝗿𝗼𝘅𝘆/𝗩𝗣𝗡 ⇾ <b>{is_proxy}</b>\n"
-                f"☁️ 𝗧𝘆𝗽𝗲 ⇾ <b>{is_hosting}</b>\n\n"
-                f"🤖 <i>Powered by Oktacomel</i>"
-            )
-            
-            kb = [[InlineKeyboardButton("🗺️ Open Google Maps", url=map_url)]]
-            await msg.edit_text(txt, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(kb))
-        else: 
-            await msg.edit_text("❌ <b>Failed.</b> Invalid IP/Domain.", parse_mode=ParseMode.HTML)
+        # =================================
+        # 1) IP -> ip-api (tetap seperti kamu)
+        # =================================
+        if is_ip(target):
+            api_url = f"http://ip-api.com/json/{target}?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,mobile,proxy,hosting,query"
+            r = await fetch_json(api_url)
+
+            if r and r.get("status") == "success":
+                lat, lon = r["lat"], r["lon"]
+                map_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
+
+                is_mobile = "✅ Yes" if r.get("mobile") else "❌ No"
+                is_proxy = "🔴 DETECTED" if r.get("proxy") else "🟢 Clean"
+                is_hosting = "🖥️ VPS/Cloud" if r.get("hosting") else "🏠 Residential"
+
+                txt = (
+                    f"🔍 <b>IP INTELLIGENCE</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"🎯 𝗧𝗮𝗿𝗴𝗲𝘁 ⇾ <code>{r['query']}</code>\n"
+                    f"🏢 𝗜𝗦𝗣 ⇾ <code>{r['isp']}</code>\n"
+                    f"💼 𝗢𝗿𝗴 ⇾ <code>{r.get('org', 'N/A')}</code>\n"
+                    f"🔢 𝗔𝗦𝗡 ⇾ <code>{r.get('as', 'N/A')}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"🌍 𝗟𝗢𝗖𝗔𝗧𝗜𝗢𝗡 𝗗𝗘𝗧𝗔𝗜𝗟\n"
+                    f"🏳️ 𝗖𝗼𝘂𝗻𝘁𝗿𝘆 ⇾ <code>{r['country']} ({r['countryCode']})</code>\n"
+                    f"📍 𝗥𝗲𝗴𝗶𝗼𝗻 ⇾ <code>{r['regionName']}</code>\n"
+                    f"🏙️ 𝗖𝗶𝘁𝘆 ⇾ <code>{r['city']}</code>\n"
+                    f"📮 𝗭𝗶𝗽 𝗖𝗼𝗱𝗲 ⇾ <code>{r['zip']}</code>\n"
+                    f"⏰ 𝗧𝗶𝗺𝗲𝘇𝗼𝗻𝗲 ⇾ <code>{r['timezone']}</code>\n"
+                    f"🛰️ 𝗖𝗼𝗼𝗿𝗱𝘀 ⇾ <code>{lat}, {lon}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"🛡️ 𝗦𝗘𝗖𝗨𝗥𝗜𝗧𝗬 𝗔𝗡𝗔𝗟𝗬𝗦𝗜𝗦\n"
+                    f"📱 𝗠𝗼𝗯𝗶𝗹𝗲 ⇾ <b>{is_mobile}</b>\n"
+                    f"🕵️ 𝗣𝗿𝗼𝘅𝘆/𝗩𝗣𝗡 ⇾ <b>{is_proxy}</b>\n"
+                    f"☁️ 𝗧𝘆𝗽𝗲 ⇾ <b>{is_hosting}</b>\n\n"
+                    f"🤖 <i>Powered by Oktacomel</i>"
+                )
+
+                kb = [[InlineKeyboardButton("🗺️ Open Google Maps", url=map_url)]]
+                await msg.edit_text(txt, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(kb))
+
+                # Kirim JSON file juga (optional, kalau kamu mau aktifin)
+                # file_json = json.dumps(r, indent=2, ensure_ascii=False).encode("utf-8")
+                # bio = BytesIO(file_json); bio.name = f"ip_{target}.json"
+                # await update.message.reply_document(bio, filename=bio.name, caption="✅ IP JSON", parse_mode=ParseMode.HTML)
+
+                return
+
+            await msg.edit_text("❌ <b>Failed.</b> Invalid IP.", parse_mode=ParseMode.HTML)
+            return
+
+        # =================================
+        # 2) DOMAIN -> RDAP JSON lengkap + file .json
+        # =================================
+        domain = normalize_domain(target)
+        resolved_ip = try_resolve_ip(domain)  # bisa None
+
+        rdap_url = f"https://rdap.org/domain/{quote(domain)}"
+        rdap = await fetch_json(rdap_url)
+
+        if not rdap or not isinstance(rdap, dict):
+            await msg.edit_text("❌ <b>Failed.</b> RDAP not available / domain invalid.", parse_mode=ParseMode.HTML)
+            return
+
+        # ---------- Extract ICANN-like ----------
+        # Nameservers
+        nameservers = []
+        for ns in (rdap.get("nameservers") or []):
+            n = ns.get("ldhName") or ns.get("unicodeName")
+            if n:
+                nameservers.append(n)
+
+        # Dates
+        def get_event(action: str) -> str:
+            for e in (rdap.get("events") or []):
+                if (e.get("eventAction") or "").lower() == action:
+                    return e.get("eventDate") or "N/A"
+            return "N/A"
+
+        created = get_event("registration")
+        updated = get_event("last changed")
+        expires = get_event("expiration")
+
+        # Contacts (Registrant/Admin/Tech/Billing)
+        def vcard_to_obj(vcard_array):
+            out = {"name": None, "email": None, "phone": None, "kind": None, "mailing_address": None}
+            try:
+                if not (isinstance(vcard_array, list) and len(vcard_array) == 2):
+                    return out
+                rows = vcard_array[1] or []
+                for row in rows:
+                    if not row or not isinstance(row, list) or len(row) < 4:
+                        continue
+                    k = row[0]
+                    v = row[3]
+                    if k == "fn":
+                        out["name"] = str(v)
+                    elif k == "email":
+                        out["email"] = str(v)
+                    elif k == "tel":
+                        out["phone"] = str(v)
+                    elif k == "kind":
+                        out["kind"] = str(v)
+                    elif k == "adr":
+                        if isinstance(v, list):
+                            parts = [str(x).strip() for x in v if str(x).strip()]
+                            out["mailing_address"] = ", ".join(parts) if parts else None
+                        else:
+                            out["mailing_address"] = str(v)
+                return out
+            except Exception:
+                return out
+
+        contacts = {"registrant": None, "administrative": None, "technical": None, "billing": None}
+        for ent in (rdap.get("entities") or []):
+            roles = [r.lower() for r in (ent.get("roles") or [])]
+            vobj = vcard_to_obj(ent.get("vcardArray"))
+
+            if "registrant" in roles and contacts["registrant"] is None:
+                contacts["registrant"] = vobj
+            if "administrative" in roles and contacts["administrative"] is None:
+                contacts["administrative"] = vobj
+            if "technical" in roles and contacts["technical"] is None:
+                contacts["technical"] = vobj
+            if "billing" in roles and contacts["billing"] is None:
+                contacts["billing"] = vobj
+
+        # ---------- Final JSON output (rapih) ----------
+        out = {
+            "DomainInformation": {
+                "Name": (rdap.get("ldhName") or rdap.get("unicodeName") or domain),
+                "RegistryDomainID": (rdap.get("handle") or "N/A"),
+                "DomainStatus": (rdap.get("status") or []),
+                "Nameservers": nameservers,
+                "Dates": {
+                    "Created": created,
+                    "Updated": updated,
+                    "RegistryExpiration": expires,
+                    "RegistrarExpiration": expires,
+                },
+                "DNS": {
+                    "Resolved": bool(resolved_ip),
+                    "ResolvedIP": resolved_ip,
+                }
+            },
+            "ContactInformation": {
+                "Registrant": contacts["registrant"],
+                "Administrative": contacts["administrative"],
+                "Technical": contacts["technical"],
+                "Billing": contacts["billing"],
+            },
+            "Source": {
+                "RDAP": rdap_url,
+                "ICANNLookup": f"https://lookup.icann.org/en/lookup?name={quote(domain)}",
+            },
+            "RawRDAP": rdap,  # biar lengkap full
+        }
+
+        # Preview ringkas di chat (biar gak kepanjangan)
+        status_txt = ", ".join(out["DomainInformation"]["DomainStatus"]) if out["DomainInformation"]["DomainStatus"] else "N/A"
+        ns_txt = " | ".join(nameservers) if nameservers else "N/A"
+        dns_txt = "✅ Resolved" if resolved_ip else "❌ Not Resolved (No A/AAAA)"
+
+        txt = (
+            f"🌐 <b>DOMAIN INTELLIGENCE</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🎯 𝗗𝗼𝗺𝗮𝗶𝗻 ⇾ <code>{domain}</code>\n"
+            f"🧩 𝗗𝗡𝗦 ⇾ <b>{dns_txt}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"📌 𝗦𝘁𝗮𝘁𝘂𝘀 ⇾ <code>{status_txt}</code>\n"
+            f"🧾 𝗖𝗿𝗲𝗮𝘁𝗲𝗱 ⇾ <code>{created}</code>\n"
+            f"🧾 𝗨𝗽𝗱𝗮𝘁𝗲𝗱 ⇾ <code>{updated}</code>\n"
+            f"🧾 𝗘𝘅𝗽𝗶𝗿𝗲𝘀 ⇾ <code>{expires}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🛰️ 𝗡𝗮𝗺𝗲𝘀𝗲𝗿𝘃𝗲𝗿𝘀 ⇾ <code>{ns_txt}</code>\n\n"
+            f"📦 <i>JSON file attached.</i>\n"
+            f"🤖 <i>Powered by Oktacomel</i>"
+        )
+
+        kb = [[
+            InlineKeyboardButton("🔎 Open ICANN Lookup", url=out["Source"]["ICANNLookup"]),
+            InlineKeyboardButton("🧾 Open RDAP JSON", url=rdap_url),
+        ]]
+        await msg.edit_text(txt, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(kb))
+
+        # Kirim file JSON (ini yang kamu minta)
+        pretty = json.dumps(out, indent=2, ensure_ascii=False).encode("utf-8")
+        bio = BytesIO(pretty)
+        bio.name = f"domain_{domain}.json"
+        await update.message.reply_document(
+            document=bio,
+            filename=bio.name,
+            caption=f"✅ <b>DOMAIN JSON</b>\n<code>{bio.name}</code>",
+            parse_mode=ParseMode.HTML
+        )
 
     except Exception as e:
         await msg.edit_text(f"❌ <b>Error:</b> {str(e)}", parse_mode=ParseMode.HTML)
